@@ -88,7 +88,7 @@ func InitPlugins() {
 	}
 
 	for _, options := range Settings.outputFile {
-		registerPlugin(NewFileOutput, options)
+		registerPlugin(NewFileOutput, options, Settings.outputFileSize)
 	}
 
 	for _, options := range Settings.inputHTTP {

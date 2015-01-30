@@ -17,12 +17,16 @@ type FileOutput struct {
 	path    string
 	encoder *gob.Encoder
 	file    *os.File
+	size    int
+	maxSize int
 }
 
-func NewFileOutput(path string) io.Writer {
+func NewFileOutput(path string, fileSize int) io.Writer {
 	o := new(FileOutput)
 	o.path = path
 	o.Init(path)
+	o.size = 0
+	o.maxSize = fileSize
 
 	return o
 }
@@ -43,8 +47,12 @@ func (o *FileOutput) Write(data []byte) (n int, err error) {
 	raw := RawRequest{time.Now().UnixNano(), data}
 
 	o.encoder.Encode(raw)
-
-	return len(data), nil
+	l := len(data)
+	o.size += l
+	if o.size > o.maxSize {
+		os.Exit(3)
+	}
+	return l, nil
 }
 
 func (o *FileOutput) String() string {
