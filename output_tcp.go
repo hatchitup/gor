@@ -22,6 +22,8 @@ func NewTCPOutput(address string) io.Writer {
 	o.buf = make(chan []byte, 100)
 	if Settings.outputTCPStats {
 		o.bufStats = NewGorStat("output_tcp")
+	} else {
+		log.Println("TCP Stats logging is disabled")
 	}
 
 	for i := 0; i < 10; i++ {

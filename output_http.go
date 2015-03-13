@@ -34,6 +34,11 @@ func ParseRequest(data []byte) (request *http.Request, err error) {
 
 	request, err = http.ReadRequest(reader)
 
+	if err != nil {
+                log.Println("Cannot read request", string(data), err)
+                return
+        }
+	
 	if request.Method == "POST" {
 		body, _ := ioutil.ReadAll(reader)
 		bodyBuf := bytes.NewBuffer(body)
