@@ -1,9 +1,10 @@
 package main
 
 import (
-	"log"
+
 	"strconv"
 	"time"
+	"log"
 )
 
 const (
@@ -29,6 +30,8 @@ func NewGorStat(statName string) (s *GorStat) {
 	if Settings.stats {
 		log.Println(s.statName + ":latest,mean,max,count,count/second")
 		go s.reportStats()
+	} else {
+		log.Println("Stats logging is disabled")
 	}
 	return
 }
