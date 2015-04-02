@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	//"github.com/nu7hatch/gouuid"
 )
 
 type RedirectNotAllowed struct{}
@@ -51,6 +52,12 @@ func ParseRequest(data []byte) (request *http.Request, err error) {
 const InitialDynamicWorkers = 10
 
 type HTTPOutput struct {
+	requestCount int
+	failedCount int
+	successCount int
+	timedOut int
+	errorCount int
+
 	address string
 	limit   int
 	queue   chan []byte
@@ -92,12 +99,17 @@ func NewHTTPOutput(address string, headers HTTPHeaders, methods HTTPMethods, url
 	o.headerHashFilters = headerHashFilters
 	o.outputHTTPUrlRewrite = outputHTTPUrlRewrite
 
-	o.queue = make(chan []byte, 100)
+	o.queue = make(chan []byte, 1000)
 	if Settings.outputHTTPStats {
 		o.queueStats = NewGorStat("output_http")
 	}
 
 	o.needWorker = make(chan int, 1)
+	o.requestCount = 0
+	o.failedCount = 0
+	o.successCount = 0
+	o.timedOut = 0
+	o.errorCount = 0
 
 	// Initial workers count
 	if Settings.outputHTTPWorkers == -1 {
@@ -120,6 +132,7 @@ func (o *HTTPOutput) WorkerMaster() {
 	for {
 		new_workers := <-o.needWorker
 		for i := 0; i < new_workers; i++ {
+			log.Println("Launching worker ", i)
 			go o.Worker()
 		}
 
@@ -142,9 +155,12 @@ func (o *HTTPOutput) Worker() {
 	for {
 		select {
 		case data := <-o.queue:
+			o.requestCount = o.requestCount + 1
+			log.Println("Total Success Failed TimeOut Error", o.requestCount, o.successCount ,o.failedCount, o.timedOut, o.errorCount)
 			o.sendRequest(client, data)
 			death_count = 0
-		case <-time.After(time.Millisecond * 100):
+		case <-time.After(time.Millisecond * 1000):	
+			o.timedOut = o.timedOut + 1
 			// When dynamic scaling enabled workers die after 2s of inactivity
 			if Settings.outputHTTPWorkers == -1 {
 				death_count += 1
@@ -191,6 +207,7 @@ func (o *HTTPOutput) sendRequest(client *http.Client, data []byte) {
 
 	if err != nil {
 		log.Println("Cannot parse request", string(data), err)
+		o.failedCount = o.failedCount + 1
 		return
 	}
 
@@ -215,6 +232,15 @@ func (o *HTTPOutput) sendRequest(client *http.Client, data []byte) {
 		SetHeader(request, header.Name, header.Value)
 	}
 
+	// Add X-Request-ID, a unique id to identify each request uniquely on the staging server
+
+ //    u4, uerr := uuid.NewV4()
+	// if uerr != nil {
+	//     log.Println("error:", uerr)
+	//     return
+	// }
+	// SetHeader(request, "X-Request-ID", u4.String())
+
 	start := time.Now()
 	resp, err := client.Do(request)
 	stop := time.Now()
@@ -225,15 +251,38 @@ func (o *HTTPOutput) sendRequest(client *http.Client, data []byte) {
 			err = nil
 		}
 	}
-
 	if err == nil {
+		if resp.Body != nil {
+			body, berr := ioutil.ReadAll(resp.Body)
+		    if berr != nil {
+		      return
+		    }
+		    o.successCount = o.successCount + 1
+			remoteIP := request.Header.Get("X-Forwarded-For")
+			connectSid, err := request.Cookie("connect.sid")
+			log.Println("GorRequest | ", remoteIP, " | ", "uuid" , " | ", strings.Split(parseCookie(connectSid, err), ".")[0], " | ", request.URL, " | ", resp.Status, " | ", string(body[:]) ," | ",  stop.Sub(start).Seconds())
+			
+	    }else
+	    {
+	    	return
+	    }
+		
 		defer resp.Body.Close()
 	} else {
 		log.Println("Request error:", err)
+		o.errorCount = o.errorCount + 1
 	}
 
 	if o.elasticSearch != nil {
 		o.elasticSearch.ResponseAnalyze(request, resp, start, stop)
+	}
+}
+
+func parseCookie(c *http.Cookie, err error) (value string){
+	if err != nil {
+		return "NA"
+	}else{
+		return c.Value
 	}
 }
 

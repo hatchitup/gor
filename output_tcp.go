@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"time"
+	"strconv"
 )
 
 type TCPOutput struct {
@@ -13,14 +14,16 @@ type TCPOutput struct {
 	limit    int
 	buf      chan []byte
 	bufStats *GorStat
+	writeCount int
 }
 
 func NewTCPOutput(address string) io.Writer {
 	o := new(TCPOutput)
 
 	o.address = address
+	o.writeCount = 0
 
-	o.buf = make(chan []byte, 100)
+	o.buf = make(chan []byte, 1000)
 	if Settings.outputTCPStats {
 		o.bufStats = NewGorStat("output_tcp")
 	} else {
@@ -53,6 +56,8 @@ func (o *TCPOutput) worker() {
 }
 
 func (o *TCPOutput) Write(data []byte) (n int, err error) {
+	o.writeCount = o.writeCount + 1
+	log.Println("Received Count: " + strconv.Itoa((o.writeCount)))
 	new_buf := make([]byte, len(data)+2)
 	data = append(data, []byte("¶")...)
 	copy(new_buf, data)

@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strconv"
 )
 
 // Can be tested using nc tool:
@@ -14,12 +15,14 @@ type TCPInput struct {
 	data     chan []byte
 	address  string
 	listener net.Listener
+	receivedCount int
 }
 
 func NewTCPInput(address string) (i *TCPInput) {
 	i = new(TCPInput)
 	i.data = make(chan []byte)
 	i.address = address
+	i.receivedCount = 0
 
 	i.listen(address)
 
@@ -29,6 +32,8 @@ func NewTCPInput(address string) (i *TCPInput) {
 func (i *TCPInput) Read(data []byte) (int, error) {
 	buf := <-i.data
 	copy(data, buf)
+	i.receivedCount = i.receivedCount + 1
+	log.Println("Received Count: " + strconv.Itoa((i.receivedCount)))
 
 	return len(buf), nil
 }
